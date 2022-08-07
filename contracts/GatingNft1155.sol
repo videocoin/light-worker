@@ -27,10 +27,10 @@ import "./RewardMgr.sol";
  *
  * _Deprecated in favor of https://wizard.openzeppelin.com/[Contracts Wizard]._
  */
-contract GatingNft1155 is Context, AccessControlEnumerable, ERC1155Burnable, ERC1155Pausable {
-    bytes32 public constant MINTER_ROLE = keccak256("MINTER_ROLE");
-    bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
+contract GatingNft1155 is Context,  ERC1155Burnable, ERC1155Pausable {
     
+    event Deposit(address, uint);
+
     address daoContract =  address(0);
     mapping (uint => address) listDao;
     mapping (uint => address) listRewardMgr;
@@ -38,16 +38,22 @@ contract GatingNft1155 is Context, AccessControlEnumerable, ERC1155Burnable, ERC
     // Token ID enumeration
     uint256[] public tokenIDs;
     mapping (uint256 => bool) public isTokenID;
+    address owner;
 
+    /**
+     *  Modifiers
+     */
+
+    modifier onlyOwner() {
+        require(msg.sender == address(owner));
+        _;
+    }
     /**
      * @dev Grants `DEFAULT_ADMIN_ROLE`, `MINTER_ROLE`, and `PAUSER_ROLE` to the account that
      * deploys the contract.
      */
     constructor(string memory uri) ERC1155(uri) {
-        _setupRole(DEFAULT_ADMIN_ROLE, _msgSender());
-
-        _setupRole(MINTER_ROLE, _msgSender());
-        _setupRole(PAUSER_ROLE, _msgSender());
+        owner =  _msgSender();
     }
 
     /**
@@ -65,8 +71,12 @@ contract GatingNft1155 is Context, AccessControlEnumerable, ERC1155Burnable, ERC
         uint256 amount,
         bytes memory data
     ) public virtual {
-        require(hasRole(MINTER_ROLE, _msgSender()), "ERC1155PresetMinterPauser: must have minter role to mint");
-
+        //require(hasRole(MINTER_ROLE, _msgSender()), "ERC1155PresetMinterPauser: must have minter role to mint");
+        if(isTokenID[id]) {
+            address owner =  getTokenOperator(id);
+            require (msg.sender == owner, "Token ID already owned");
+            require (msg.sender == to, "Only self minting allowed");
+        }
         _mint(to, id, amount, data);
     }
 
@@ -79,10 +89,9 @@ contract GatingNft1155 is Context, AccessControlEnumerable, ERC1155Burnable, ERC
         uint256[] memory amounts,
         bytes memory data
     ) public virtual {
-        require(hasRole(MINTER_ROLE, _msgSender()), "ERC1155PresetMinterPauser: must have minter role to mint");
-
-        _mintBatch(to, ids, amounts, data);
+        require(false, "Not implemented");
     }
+
     /**
      * @dev Pauses all token transfers.
      *
@@ -92,8 +101,10 @@ contract GatingNft1155 is Context, AccessControlEnumerable, ERC1155Burnable, ERC
      *
      * - the caller must have the `PAUSER_ROLE`.
      */
-    function pause() public virtual {
-        require(hasRole(PAUSER_ROLE, _msgSender()), "ERC1155PresetMinterPauser: must have pauser role to pause");
+    function pause() 
+    public virtual 
+    onlyOwner
+    {
         _pause();
     }
 
@@ -106,22 +117,11 @@ contract GatingNft1155 is Context, AccessControlEnumerable, ERC1155Burnable, ERC
      *
      * - the caller must have the `PAUSER_ROLE`.
      */
-    function unpause() public virtual {
-        require(hasRole(PAUSER_ROLE, _msgSender()), "ERC1155PresetMinterPauser: must have pauser role to unpause");
-        _unpause();
-    }
-
-    /**
-     * @dev See {IERC165-supportsInterface}.
-     */
-    function supportsInterface(bytes4 interfaceId)
-        public
-        view
-        virtual
-        override(AccessControlEnumerable, ERC1155)
-        returns (bool)
+    function unpause() 
+    public virtual 
+    onlyOwner
     {
-        return super.supportsInterface(interfaceId);
+        _unpause();
     }
 
     function _beforeTokenTransfer(
@@ -145,26 +145,26 @@ contract GatingNft1155 is Context, AccessControlEnumerable, ERC1155Burnable, ERC
     ) internal virtual override(ERC1155) {
         
         for (uint256 i = 0; i < ids.length; ++i) {
-
+            uint tokenId = ids[i];
             // Create Rewards Distribution contract for the node if it does not exist and minting(redundant check ?)
-            if(listRewardMgr[i] == address(0) && from == address(0)) {
-                listRewardMgr[i] = address(new RewardMgr(address(this), msg.sender, i));
+            if(listRewardMgr[tokenId] == address(0) && from == address(0)) {
+                listRewardMgr[tokenId] = address(new RewardMgr(address(this), msg.sender, tokenId));
             }
 
             // Create DAO for the node if it does not exist and minting minting(redundant check ?)
-            if(listDao[i] == address(0) && from == address(0)){
-                listDao[i] = address(new LightWorkerDao(address(this), msg.sender, listRewardMgr[i], i));
-                LightWorkerDao(listDao[i]).addWorker(to);
+            if(listDao[tokenId] == address(0) && from == address(0)){
+                listDao[tokenId] = address(new LightWorkerDao(address(this), msg.sender, listRewardMgr[tokenId], tokenId));
+                LightWorkerDao(listDao[tokenId]).addWorker(to);
             }
-            _addTokenID(ids[i]);
+            _addTokenID(tokenId);
 
             // Remove if balance falls to zero
-            if(from != address(0) && balanceOf(from, i) == 0) {
-                LightWorkerDao(listDao[ids[i]]).removeWorker(from);
+            if(from != address(0) && balanceOf(from, tokenId) == 0) {
+                LightWorkerDao(listDao[tokenId]).removeWorker(from);
             }
             // Add if balance is greater than zero
-            if(to != address(0) && balanceOf(to, i) > 0) {
-                LightWorkerDao(listDao[ids[i]]).addWorker(to);
+            if(to != address(0) && balanceOf(to, tokenId) > 0) {
+                LightWorkerDao(listDao[tokenId]).addWorker(to);
             }
         }
     }
@@ -207,29 +207,59 @@ contract GatingNft1155 is Context, AccessControlEnumerable, ERC1155Burnable, ERC
         }
         return _tokenIDs;
     }
-
     
-    function purchaseToken(uint256 tokenId) public payable returns (uint256) {
+    function getTokenOperator(uint tokenId) public returns (address) {
+        address owner =  LightWorkerDao(listDao[tokenId]).getOperator();
+        return owner;
+    }
+
+    function getToken(uint256 tokenId) public payable returns (uint256) {
 
         require(isTokenID[tokenId], "Invalid Token ID");
   
         // Get the token owner
-        address owner =  LightWorkerDao(listDao[tokenId]).getOperator();
+        address owner =  getTokenOperator(tokenId);
         uint tokenPrice = LightWorkerDao(listDao[tokenId]).getTokenPrice();
 
         require(owner != msg.sender, "You cannot buy your own token");
+        require(tokenPrice == 0, "Token price not set yet");
         require(msg.value == tokenPrice, "You must pay the full price");
 
         // Transfer the token
         safeTransferFrom(owner, msg.sender, tokenId, 1, "");
 
+        // Payment goes to escrow
+        //(bool sent,) = payable(owner).call{value:msg.value}("");
+        //require(sent, "Payment failed");
+        return tokenId;
+    }
+
+    function releaseToken(uint256 tokenId) public payable returns (uint256) {
+        require(isTokenID[tokenId], "Invalid Token ID");
+  
+        // Get the token owner
+        address owner =  getTokenOperator(tokenId);
+        uint tokenPrice = LightWorkerDao(listDao[tokenId]).getTokenPrice();
+
+        require(owner != msg.sender, "You cannot repurchase your own token");
+        require(msg.value == tokenPrice, "You must pay the full price");
+
+        uint balance = balanceOf(msg.sender, tokenId);
+
+        require(balance > 0, "You do not own the token");
+
+
+        // Transfer the token
+        safeTransferFrom(msg.sender, owner, tokenId, 1, "");
+
         // Make a payment to the owner of the token
-        (bool sent,) = payable(owner).call{value:msg.value}("");
+        (bool sent,) = payable(msg.sender).call{value:msg.value}("");
         require(sent, "Payment failed");
         return tokenId;
     }
 
-    function redeemToken(uint256 tokenId) public payable returns (uint256) {
-        // TODO
+    fallback() external payable {
+        if (msg.value > 0)
+            emit  Deposit(msg.sender, msg.value);
     }
 }

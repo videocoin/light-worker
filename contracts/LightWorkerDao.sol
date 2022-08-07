@@ -24,7 +24,7 @@ contract LightWorkerDao is ILightWorkerDao {
     // Constants
     
     // Parent contract
-    address public contractAddress;
+    address public parent;
     
     // Reward distribution contract 
     address public rewardMgr;
@@ -69,7 +69,7 @@ contract LightWorkerDao is ILightWorkerDao {
     }
 
     modifier onlyParent() {
-        require(msg.sender == address(contractAddress));
+        require(msg.sender == address(parent));
         _;
     }
 
@@ -116,13 +116,12 @@ contract LightWorkerDao is ILightWorkerDao {
     }
     */
 
-    constructor(address _contractAddress, address _operator, address _rewardMgr, uint _tokenID)
+    constructor(address _parent, address _operator, address _rewardMgr, uint _tokenID)
     {
-        contractAddress = _contractAddress;
+        parent = _parent;
         tokenID = _tokenID;
         operator = _operator;
         rewardMgr = _rewardMgr;
-        tokenPrice = 500*1E18;
     }
 
     function getOperator() public view returns (address) {
@@ -180,7 +179,7 @@ contract LightWorkerDao is ILightWorkerDao {
         transactionExists(challengeId)
         notConfirmed(challengeId, msg.sender)
     {
-        uint count = IERC1155(contractAddress).balanceOf(msg.sender, tokenID);
+        uint count = IERC1155(parent).balanceOf(msg.sender, tokenID);
         responses[challengeId][msg.sender] = value;
         emit  Response(tokenID, msg.sender, challengeId);
         processPredictions(challengeId);
@@ -336,6 +335,7 @@ contract LightWorkerDao is ILightWorkerDao {
     public 
     onlyOperator
     {
+        require( tokenPrice == 0, "Token price can be set only once");
         tokenPrice = price;
     }
 
