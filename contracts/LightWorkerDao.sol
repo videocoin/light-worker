@@ -3,6 +3,7 @@ pragma solidity ^0.8.0;
 
 import "@openzeppelin/contracts/token/ERC1155/IERC1155.sol";
 import "@openzeppelin/contracts/utils/math/Math.sol";
+import "@openzeppelin/contracts/token/ERC1155/IERC1155.sol";
 
 import "./ILightWorkerDao.sol";
 import "./RewardMgr.sol";
@@ -324,13 +325,44 @@ contract LightWorkerDao is ILightWorkerDao {
         for (i=from; i<to; i++)
             _transactionIds[i - from] = transactionIdsTemp[i];
     }
-    /*
+    
+    function acquireToken() public payable returns (uint256) {
 
+        require(tokenPrice != 0, "Token price not set yet");
+        require(msg.value == tokenPrice, "You must pay the full price");
+
+        // Transfer the token
+        IERC1155(parent).safeTransferFrom(operator, msg.sender, tokenID, 1, "");
+
+        // Payment goes to escrow
+        //(bool sent,) = payable(owner).call{value:msg.value}("");
+        //require(sent, "Payment failed");
+        return tokenID;
+    }
+
+    // Allow this DAO contract to act as operator before calling releaseToken
+    // IERC1155(parent).setApprovalForAll(address(this), true);
+
+    function releaseToken() public payable returns (uint256) {
+        // Check the msg.sender have tokens
+        uint tokenBalance = IERC1155(parent).balanceOf(msg.sender, tokenID);
+        require (tokenBalance > 0, "You do not own token"); 
+        require(address(this).balance >= tokenPrice, "Not enough escrow balance!");
+        
+        IERC1155(parent).safeTransferFrom(msg.sender, operator, tokenID, 1, "");
+
+        // Make a payment to the owner of the token
+        (bool sent,) = payable(msg.sender).call{value:tokenPrice}("");
+        require(sent, "Payment failed");
+        return tokenID;
+    }
+  
+
+    /*
     receive() external payable  { 
         //fundme();
     }
-    */    
-
+    */
     function setTokenPrice(uint price) 
     public 
     onlyOperator

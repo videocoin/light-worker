@@ -73,11 +73,11 @@ contract GatingNft1155 is Context,  ERC1155Burnable, ERC1155Pausable {
     ) public virtual {
         //require(hasRole(MINTER_ROLE, _msgSender()), "ERC1155PresetMinterPauser: must have minter role to mint");
         if(isTokenID[id]) {
-            address owner =  getTokenOperator(id);
-            require (msg.sender == owner, "Token ID already owned");
+            address operator =  getTokenOperator(id);
+            require (msg.sender == operator, "Token ID already owned");
             require (msg.sender == to, "Only self minting allowed");
         }
-        _mint(to, id, amount, data);
+        _mint(to, id, amount, data);   
     }
 
     /**
@@ -151,10 +151,11 @@ contract GatingNft1155 is Context,  ERC1155Burnable, ERC1155Pausable {
                 listRewardMgr[tokenId] = address(new RewardMgr(address(this), msg.sender, tokenId));
             }
 
-            // Create DAO for the node if it does not exist and minting minting(redundant check ?)
+            // Create DAO for the node if it does not exist
             if(listDao[tokenId] == address(0) && from == address(0)){
                 listDao[tokenId] = address(new LightWorkerDao(address(this), msg.sender, listRewardMgr[tokenId], tokenId));
-                LightWorkerDao(listDao[tokenId]).addWorker(to);
+                //LightWorkerDao(listDao[tokenId]).addWorker(to);
+                setApprovalForAll(listDao[tokenId], true);
             }
             _addTokenID(tokenId);
 
@@ -209,57 +210,7 @@ contract GatingNft1155 is Context,  ERC1155Burnable, ERC1155Pausable {
     }
     
     function getTokenOperator(uint tokenId) public returns (address) {
-        address owner =  LightWorkerDao(listDao[tokenId]).getOperator();
-        return owner;
-    }
-
-    function getToken(uint256 tokenId) public payable returns (uint256) {
-
-        require(isTokenID[tokenId], "Invalid Token ID");
-  
-        // Get the token owner
-        address owner =  getTokenOperator(tokenId);
-        uint tokenPrice = LightWorkerDao(listDao[tokenId]).getTokenPrice();
-
-        require(owner != msg.sender, "You cannot buy your own token");
-        require(tokenPrice == 0, "Token price not set yet");
-        require(msg.value == tokenPrice, "You must pay the full price");
-
-        // Transfer the token
-        safeTransferFrom(owner, msg.sender, tokenId, 1, "");
-
-        // Payment goes to escrow
-        //(bool sent,) = payable(owner).call{value:msg.value}("");
-        //require(sent, "Payment failed");
-        return tokenId;
-    }
-
-    function releaseToken(uint256 tokenId) public payable returns (uint256) {
-        require(isTokenID[tokenId], "Invalid Token ID");
-  
-        // Get the token owner
-        address owner =  getTokenOperator(tokenId);
-        uint tokenPrice = LightWorkerDao(listDao[tokenId]).getTokenPrice();
-
-        require(owner != msg.sender, "You cannot repurchase your own token");
-        require(msg.value == tokenPrice, "You must pay the full price");
-
-        uint balance = balanceOf(msg.sender, tokenId);
-
-        require(balance > 0, "You do not own the token");
-
-
-        // Transfer the token
-        safeTransferFrom(msg.sender, owner, tokenId, 1, "");
-
-        // Make a payment to the owner of the token
-        (bool sent,) = payable(msg.sender).call{value:msg.value}("");
-        require(sent, "Payment failed");
-        return tokenId;
-    }
-
-    fallback() external payable {
-        if (msg.value > 0)
-            emit  Deposit(msg.sender, msg.value);
+        address operator =  LightWorkerDao(listDao[tokenId]).getOperator();
+        return operator;
     }
 }
