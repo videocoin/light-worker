@@ -51,13 +51,15 @@ contract LightWorkerDao is ILightWorkerDao {
     uint public currentPrediction;
 
     struct PredictionChallenge {
-        uint value;             // predicted median value
-        uint minValue;          // Reject proposals below this value
-        uint maxValue;          // Reject proposals above this value
-        uint rewardThreshold;   // Proposal is Eligible for reward if proposal is between median +- rewardThreshold
+        uint value;             // Filled by contract after processing proposals. Predicted median value
+        uint minValue;          // Reject proposals below this value. Operator supplied.
+        uint maxValue;          // Reject proposals above this value. Operator supplied.
+        uint rewardThreshold;   // Proposal is eligible for reward if proposal is between median +- rewardThreshold
         uint rewardAmount;      // Reward amount distributed among winning proposals       
-        bytes data;             // metadata
-        bool executed;          // Falg indicates if prediction is completed
+        bytes data;             // metadata. Operator supplied, opaque to contract code
+        uint creationTime;      // Filled by contract. Seconds since Jan 1st 1970
+        uint validWindow;       // Validity of challenge in seconds, starting from creation time              
+        bool executed;          // Falg indicates if prediction is completed. Filled by contract.
     }
 
     /*
@@ -158,20 +160,20 @@ contract LightWorkerDao is ILightWorkerDao {
         }
     }
 
-    function addPredictionChallenge(uint rewardAmount, uint rewardThreshold, uint minValue, uint maxValue, bytes memory data)
+    function addPredictionChallenge(uint rewardAmount, uint rewardThreshold, uint minValue, uint maxValue, uint validWindow, bytes memory data)
         public
         returns (uint challengeId)
     {
-        challengeId = _addPredictionChallenge(rewardAmount, rewardThreshold, minValue,  maxValue, data);
+        challengeId = _addPredictionChallenge(rewardAmount, rewardThreshold, minValue,  maxValue, validWindow, data);
         //confirmTransaction(challengeId);
     }
 
-    function getPredictionChallenge() external returns (uint challengeId, uint minValue, uint maxValue, bytes memory data) {
+    function getPredictionChallenge() external returns (uint challengeId, uint minValue, uint maxValue, uint creationTIme, uint validWindow, bytes memory data) {
       if(challengeId > 1) {
           PredictionChallenge memory challenge = challenges[challengeId];
-          return (challengeId, challenge.minValue, challenge.maxValue, challenge.data);  
+          return (challengeId, challenge.minValue, challenge.maxValue, challenge.creationTime, challenge.validWindow, challenge.data);  
       }
-      return (0,0,0,"");  
+      return (0,0,0,0,0,"");  
     }
 
     function submitResponse(uint challengeId, uint value)
@@ -226,7 +228,7 @@ contract LightWorkerDao is ILightWorkerDao {
     }
 
 
-    function _addPredictionChallenge(uint rewardAmount, uint rewardThreshold, uint minValue, uint maxValue, bytes memory data)
+    function _addPredictionChallenge(uint rewardAmount, uint rewardThreshold, uint minValue, uint maxValue, uint validWindow, bytes memory data)
         internal
         returns (uint challengeId)
     {
@@ -238,6 +240,8 @@ contract LightWorkerDao is ILightWorkerDao {
             rewardAmount: rewardAmount,
             rewardThreshold: rewardThreshold,
             data: data,
+            creationTime: block.timestamp,
+            validWindow: validWindow,                
             executed: false
         });
         challengeCount += 1;
@@ -254,7 +258,7 @@ contract LightWorkerDao is ILightWorkerDao {
                 count += responses[challengeId][workers[i]];
     }
 
-    function getTransactionCount(bool pending, bool executed)
+    function getChallengeCount(bool pending, bool executed)
         public
         view        
         returns (uint count)
@@ -306,7 +310,7 @@ contract LightWorkerDao is ILightWorkerDao {
             _confirmations[i] = confirmationsTemp[i];
     }
 
-    function getTransactionIds(uint from, uint to, bool pending, bool executed)
+    function getChallengeIds(uint from, uint to, bool pending, bool executed)
         public
         view
         returns (uint[] memory  _transactionIds)
