@@ -1,0 +1,12 @@
+// {type:sequence}
+// {generate:true}
+
+[:Operator]mint(self, serviceID, numTokens)>[:GatingNft1155]
+[:Operator]-[note: First call to mint creates LighworkerDAO and reward Mgr{bg:cornsilk}]
+[:GatingNft1155]rewardMgr=new RewardMgr>[:GatingNft1155]
+
+[:GatingNft1155]dao=new LightWorkerDao(rewardMgr))>[:GatingNft1155]
+[:GatingNft1155]setApprovalForAll(dao)>[:GatingNft1155]
+
+[:Operator]mint(self, serviceID, numTokens)>[:GatingNft1155]
+[:Operator]-[note: Subsequent calls to mint for a tokenID, increases amount.  Only operator of serviceID(tokenID) is allowed  to increase {bg:cornsilk}]

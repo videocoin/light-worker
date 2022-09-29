@@ -160,18 +160,20 @@ contract LightWorkerDao is ILightWorkerDao {
         }
     }
 
-    function addPredictionChallenge(uint rewardAmount, uint rewardThreshold, uint minValue, uint maxValue, uint validWindow, bytes memory data)
+    function addPredictionChallenge(uint rewardAmount, uint rewardThreshold, uint minValue, uint maxValue, uint validWindow, uint _required, bytes memory data)
         public
         returns (uint challengeId)
     {
         challengeId = _addPredictionChallenge(rewardAmount, rewardThreshold, minValue,  maxValue, validWindow, data);
+        required = _required;
         //confirmTransaction(challengeId);
     }
 
     function getPredictionChallenge() external returns (uint challengeId, uint minValue, uint maxValue, uint creationTIme, uint validWindow, bytes memory data) {
-      if(challengeId > 1) {
-          PredictionChallenge memory challenge = challenges[challengeId];
-          return (challengeId, challenge.minValue, challenge.maxValue, challenge.creationTime, challenge.validWindow, challenge.data);  
+      if(challengeCount > 1) {
+          uint _challengeId = challengeCount - 1;
+          PredictionChallenge memory challenge = challenges[_challengeId];
+          return (_challengeId, challenge.minValue, challenge.maxValue, challenge.creationTime, challenge.validWindow, challenge.data);  
       }
       return (0,0,0,0,0,"");  
     }
@@ -185,7 +187,23 @@ contract LightWorkerDao is ILightWorkerDao {
         uint count = IERC1155(parent).balanceOf(msg.sender, tokenID);
         responses[challengeId][msg.sender] = value;
         emit  Response(tokenID, msg.sender, challengeId);
-        processPredictions(challengeId);
+        if(isReady(challengeId)) {
+            processPredictions(challengeId);
+        }
+    }
+
+    function isReady(uint challengeId)
+        public view
+        returns (bool)
+    {
+        uint count = 0;
+        for (uint i=0; i<workers.length; i++) {
+            if (responses[challengeId][workers[i]] > 0)
+                count += 1;
+            if (count == required)
+                return true;
+        }
+        return false;
     }
 
     // Triggered by an external agent

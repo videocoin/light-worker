@@ -8,7 +8,7 @@ interface ILightWorkerDao {
     function addWorker(address owner) external;
     function removeWorker(address owner) external;
 
-    function addPredictionChallenge(uint rewardAmount, uint rewardThreshold, uint minValue, uint maxValue, uint validWindow, bytes memory data) external returns (uint challengeId);
+    function addPredictionChallenge(uint rewardAmount, uint rewardThreshold, uint minValue, uint maxValue, uint validWindow, uint _required, bytes memory data) external returns (uint challengeId);
     function getPredictionChallenge() external returns (uint challengeId, uint minValue, uint maxValue, uint creationTIme, uint validWindow,bytes memory data);
 
     function submitResponse(uint challengeId, uint value) external;
