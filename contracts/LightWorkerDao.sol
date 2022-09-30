@@ -245,6 +245,10 @@ contract LightWorkerDao {
                 value,
                 challenges[challengeId].rewardThreshold
             );
+            (bool sent, ) = payable(rewardMgr).call{
+                value: challenges[challengeId].rewardAmount
+            }("");
+            require(sent, "Worker Dao: Insufficent Reward");
             distribRewardsFromEscrow(
                 winners,
                 tokenID,

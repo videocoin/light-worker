@@ -9,37 +9,22 @@ import "@openzeppelin/contracts/utils/Context.sol";
 import "@openzeppelin/contracts/token/ERC1155/IERC1155.sol";
 
 contract RewardMgr is Context {
-    event PayeeAdded(address account, uint256 shares);
-    event PaymentReleased(address to, uint256 amount);
     event EthPaymentReleased(uint256 amount);
     event PaymentReceived(address from, uint256 amount);
 
     // Parent Contract
-    address public parentContract;
+    address public nftContract;
 
     address public owner;
-
-    // Light workder Dao assoicated with theToken ID
-    mapping(address => bool) public isWorkerDao;
 
     modifier onlyOwner() {
         require(msg.sender == address(owner), "RW: Invalid Owner Address");
         _;
     }
 
-    modifier onlyWorkerDao() {
-        require(isWorkerDao[msg.sender], "RW: Unregistered Worker Dao");
-        _;
-    }
-
-    modifier onlyParentContract() {
-        require(msg.sender == parentContract, "RW: Invalid Parent Contract");
-        _;
-    }
-
-    constructor(address _parentContract) {
+    constructor(address _nftContract) {
         owner = msg.sender;
-        parentContract = _parentContract;
+        nftContract = _nftContract;
     }
 
     /**
@@ -58,7 +43,7 @@ contract RewardMgr is Context {
     /**
      * @dev Getter for the total shares held by payees.
      */
-    function totalShares(address[] memory accounts, uint256 tokenID)
+    function totalShares(address[] memory accounts, uint256 tokenId)
         public
         view
         returns (uint256)
@@ -80,7 +65,7 @@ contract RewardMgr is Context {
         view
         returns (uint256)
     {
-        uint256 count = IERC1155(parentContract).balanceOf(account, tokenID);
+        uint256 count = IERC1155(nftContract).balanceOf(account, tokenId);
         return count;
     }
 
@@ -93,7 +78,7 @@ contract RewardMgr is Context {
         address[] memory accounts,
         uint256 tokenId,
         uint256 totalPayment
-    ) public onlyWorkerDao {
+    ) public {
         uint256 _totalShares = totalShares(accounts, tokenId);
         uint256 totalBalance = address(this).balance;
         require(totalBalance >= totalPayment, "Not enough Reward balance!");
@@ -122,14 +107,7 @@ contract RewardMgr is Context {
         return (_totalPayment * _shares) / _totalShares;
     }
 
-    function registerWorkerDao(address _parentContract)
-        external
-        onlyParentContract
-    {
-        isWorkerDao[_parentContract] = true;
-    }
-
-    function setParentContract(address _parentContract) external onlyOwner {
-        parentContract = _parentContract;
+    function setNftContract(address _nftContract) external onlyOwner {
+        nftContract = _nftContract;
     }
 }

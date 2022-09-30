@@ -76,7 +76,6 @@ contract GatingNft1155 is Context, ERC1155, ERC1155Burnable, ERC1155Pausable {
             listDao[id] = address(
                 new LightWorkerDao(address(this), msg.sender, rewardMgr, id)
             );
-            RewardMgr(payable(rewardMgr)).registerWorkerDao(listDao[id]);
 
             LightWorkerDao(payable(listDao[id])).addWorker(to);
 
