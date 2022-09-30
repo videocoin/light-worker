@@ -7,46 +7,39 @@ import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/utils/Address.sol";
 import "@openzeppelin/contracts/utils/Context.sol";
 import "@openzeppelin/contracts/token/ERC1155/IERC1155.sol";
-import "./IRewardMgr.sol";
 
-contract RewardMgr is IRewardMgr, Context {
+contract RewardMgr is Context {
     event PayeeAdded(address account, uint256 shares);
     event PaymentReleased(address to, uint256 amount);
-    event ERC20PaymentReleased(IERC20 indexed token, address to, uint256 amount);
+    event EthPaymentReleased(uint256 amount);
     event PaymentReceived(address from, uint256 amount);
-    
-    // Miner node operator assoicated with theToken ID
-    address payable public operator;
-    
-    // Contract deployer
-    address public  owner;
 
-    // Parent Contract    
-    address public  contractAddress;
+    // Parent Contract
+    address public parentContract;
 
-    // Tken ID associated with this instance
-    uint256 public  tokenID;
+    address public owner;
 
-    modifier onlyOperator() {
-        require(msg.sender == address(operator));
-        _;
-    }
+    // Light workder Dao assoicated with theToken ID
+    mapping(address => bool) public isWorkerDao;
 
     modifier onlyOwner() {
-        require(msg.sender == address(owner));
+        require(msg.sender == address(owner), "RW: Invalid Owner Address");
         _;
     }
 
-    modifier onlyParent() {
-        require(msg.sender == address(contractAddress));
+    modifier onlyWorkerDao() {
+        require(isWorkerDao[msg.sender], "RW: Unregistered Worker Dao");
         _;
     }
 
-    constructor(address _operator, address _contractAddress, uint _tokenID) payable {
+    modifier onlyParentContract() {
+        require(msg.sender == parentContract, "RW: Invalid Parent Contract");
+        _;
+    }
+
+    constructor(address _parentContract) {
         owner = msg.sender;
-        operator = payable(_operator);
-        contractAddress = _contractAddress;
-        tokenID = _tokenID;
+        parentContract = _parentContract;
     }
 
     /**
@@ -65,11 +58,15 @@ contract RewardMgr is IRewardMgr, Context {
     /**
      * @dev Getter for the total shares held by payees.
      */
-    function totalShares(address [] memory accounts) public view returns (uint256) {
+    function totalShares(address[] memory accounts, uint256 tokenID)
+        public
+        view
+        returns (uint256)
+    {
         uint256 _totalShares = 0;
         // TODO get it from GatingNft1155
-        for (uint i=0; i < accounts.length; i++) {
-            uint256 _shares = shares(accounts[i]);
+        for (uint256 i = 0; i < accounts.length; i++) {
+            uint256 _shares = shares(accounts[i], tokenId);
             _totalShares += _shares;
         }
         return _totalShares;
@@ -78,10 +75,13 @@ contract RewardMgr is IRewardMgr, Context {
     /**
      * @dev Getter for the amount of shares held by an account.
      */
-    function shares(address account) public view returns (uint256) {
-        uint256 _shares = 0;
-       uint count = IERC1155(contractAddress).balanceOf(account, tokenID);
-        return _shares;
+    function shares(address account, uint256 tokenId)
+        public
+        view
+        returns (uint256)
+    {
+        uint256 count = IERC1155(parentContract).balanceOf(account, tokenID);
+        return count;
     }
 
     /**
@@ -89,19 +89,25 @@ contract RewardMgr is IRewardMgr, Context {
      * percentage of the total shares and their previous withdrawals. `token` must be the address of an IERC20
      * contract.
      */
-    function distribute(IERC20 token, address[] memory accounts, uint256 totalPayment) 
-    public 
-    onlyOperator 
-    {
-        uint256 _totalShares = totalShares(accounts); 
-        uint256 totalBalance = token.balanceOf(address(this));
-        require(totalBalance >= totalPayment); 
-        for (uint i=0; i < accounts.length; i++) {
-            uint256 _shares = shares(accounts[i]);
-            uint256 payment = _pendingPayment(accounts[i], _shares, _totalShares, totalPayment);
-            SafeERC20.safeTransfer(token, accounts[i], payment);
-            emit ERC20PaymentReleased(token, accounts[i], payment);
+    function distribute(
+        address[] memory accounts,
+        uint256 tokenId,
+        uint256 totalPayment
+    ) public onlyWorkerDao {
+        uint256 _totalShares = totalShares(accounts, tokenId);
+        uint256 totalBalance = address(this).balance;
+        require(totalBalance >= totalPayment, "Not enough Reward balance!");
+        for (uint256 i = 0; i < accounts.length; i++) {
+            uint256 _shares = shares(accounts[i], tokenId);
+            uint256 payment = _pendingPayment(
+                _shares,
+                _totalShares,
+                totalPayment
+            );
+            (bool sent, ) = payable(accounts[i]).call{value: payment}("");
+            require(sent, "Payment failed");
         }
+        emit EthPaymentReleased(totalPayment);
     }
 
     /**
@@ -109,12 +115,21 @@ contract RewardMgr is IRewardMgr, Context {
      * already released amounts.
      */
     function _pendingPayment(
-        address account,
         uint256 _shares,
         uint256 _totalShares,
         uint256 _totalPayment
-    ) private view returns (uint256) {
+    ) private pure returns (uint256) {
         return (_totalPayment * _shares) / _totalShares;
     }
 
+    function registerWorkerDao(address _parentContract)
+        external
+        onlyParentContract
+    {
+        isWorkerDao[_parentContract] = true;
+    }
+
+    function setParentContract(address _parentContract) external onlyOwner {
+        parentContract = _parentContract;
+    }
 }

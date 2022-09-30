@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-
 import "@openzeppelin/contracts/token/ERC1155/ERC1155.sol";
 import "@openzeppelin/contracts/token/ERC1155/extensions/ERC1155Burnable.sol";
 import "@openzeppelin/contracts/token/ERC1155/extensions/ERC1155Pausable.sol";
@@ -9,7 +8,6 @@ import "@openzeppelin/contracts/access/AccessControlEnumerable.sol";
 import "@openzeppelin/contracts/utils/Context.sol";
 import "./LightWorkerDao.sol";
 import "./RewardMgr.sol";
-
 
 /**
  * @dev {ERC1155} token, including:
@@ -27,33 +25,30 @@ import "./RewardMgr.sol";
  *
  * _Deprecated in favor of https://wizard.openzeppelin.com/[Contracts Wizard]._
  */
-contract GatingNft1155 is Context,  ERC1155Burnable, ERC1155Pausable {
-    
-    event Deposit(address, uint);
+contract GatingNft1155 is Context, ERC1155, ERC1155Burnable, ERC1155Pausable {
+    event Deposit(address, uint256);
 
-    address daoContract =  address(0);
-    mapping (uint => address) listDao;
-    mapping (uint => address) listRewardMgr;
+    mapping(uint256 => address) private listDao;
+    mapping(uint256 => bool) public isTokenID;
 
     // Token ID enumeration
     uint256[] public tokenIDs;
-    mapping (uint256 => bool) public isTokenID;
-    address owner;
-
-    /**
-     *  Modifiers
-     */
+    address public owner;
+    address public rewardMgr;
 
     modifier onlyOwner() {
-        require(msg.sender == address(owner));
+        require(msg.sender == address(owner), "Gate: Invalid Owner Address");
         _;
     }
+
     /**
      * @dev Grants `DEFAULT_ADMIN_ROLE`, `MINTER_ROLE`, and `PAUSER_ROLE` to the account that
      * deploys the contract.
      */
     constructor(string memory uri) ERC1155(uri) {
-        owner =  _msgSender();
+        owner = _msgSender();
+        // Create Rewards Distribution contract for the node if it does not exist and minting(redundant check ?)
+        rewardMgr = address(new RewardMgr(address(this)));
     }
 
     /**
@@ -70,25 +65,36 @@ contract GatingNft1155 is Context,  ERC1155Burnable, ERC1155Pausable {
         uint256 id,
         uint256 amount,
         bytes memory data
-    ) public virtual {
+    ) public {
         //require(hasRole(MINTER_ROLE, _msgSender()), "ERC1155PresetMinterPauser: must have minter role to mint");
-        if(isTokenID[id]) {
-            address operator =  getTokenOperator(id);
-            require (msg.sender == operator, "Token ID already owned");
-            require (msg.sender == to, "Only self minting allowed");
+        require(msg.sender == to, "Only self minting allowed");
+        if (isTokenID[id]) {
+            address operator = getTokenOperator(id);
+            require(msg.sender == operator, "Token ID already owned");
+        } else {
+            // Create DAO for the node if it does not exist
+            listDao[id] = address(
+                new LightWorkerDao(address(this), msg.sender, rewardMgr, id)
+            );
+            RewardMgr(payable(rewardMgr)).registerWorkerDao(listDao[id]);
+
+            LightWorkerDao(payable(listDao[id])).addWorker(to);
+
+            setApprovalForAll(listDao[id], true);
+            _addTokenID(id);
         }
-        _mint(to, id, amount, data);   
+        _mint(to, id, amount, data);
     }
 
     /**
      * @dev xref:ROOT:erc1155.adoc#batch-operations[Batched] variant of {mint}.
      */
-    function mintBatch(
+    function _mintBatch(
         address to,
         uint256[] memory ids,
         uint256[] memory amounts,
         bytes memory data
-    ) public virtual {
+    ) internal virtual override {
         require(false, "Not implemented");
     }
 
@@ -101,10 +107,7 @@ contract GatingNft1155 is Context,  ERC1155Burnable, ERC1155Pausable {
      *
      * - the caller must have the `PAUSER_ROLE`.
      */
-    function pause() 
-    public virtual 
-    onlyOwner
-    {
+    function pause() public virtual onlyOwner {
         _pause();
     }
 
@@ -117,10 +120,7 @@ contract GatingNft1155 is Context,  ERC1155Burnable, ERC1155Pausable {
      *
      * - the caller must have the `PAUSER_ROLE`.
      */
-    function unpause() 
-    public virtual 
-    onlyOwner
-    {
+    function unpause() public virtual onlyOwner {
         _unpause();
     }
 
@@ -143,74 +143,49 @@ contract GatingNft1155 is Context,  ERC1155Burnable, ERC1155Pausable {
         uint256[] memory amounts,
         bytes memory data
     ) internal virtual override(ERC1155) {
-        
         for (uint256 i = 0; i < ids.length; ++i) {
-            uint tokenId = ids[i];
-            // Create Rewards Distribution contract for the node if it does not exist and minting(redundant check ?)
-            if(listRewardMgr[tokenId] == address(0) && from == address(0)) {
-                listRewardMgr[tokenId] = address(new RewardMgr(address(this), msg.sender, tokenId));
-            }
-
-            // Create DAO for the node if it does not exist
-            if(listDao[tokenId] == address(0) && from == address(0)){
-                listDao[tokenId] = address(new LightWorkerDao(address(this), msg.sender, listRewardMgr[tokenId], tokenId));
-                //LightWorkerDao(listDao[tokenId]).addWorker(to);
-                setApprovalForAll(listDao[tokenId], true);
-            }
-            _addTokenID(tokenId);
+            uint256 tokenId = ids[i];
 
             // Remove if balance falls to zero
-            if(from != address(0) && balanceOf(from, tokenId) == 0) {
-                LightWorkerDao(listDao[tokenId]).removeWorker(from);
+            if (from != address(0) && balanceOf(from, tokenId) == 0) {
+                LightWorkerDao(payable(listDao[tokenId])).removeWorker(from);
             }
             // Add if balance is greater than zero
-            if(to != address(0) && balanceOf(to, tokenId) > 0) {
-                LightWorkerDao(listDao[tokenId]).addWorker(to);
+            if (to != address(0) && balanceOf(to, tokenId) > 0) {
+                LightWorkerDao(payable(listDao[tokenId])).addWorker(to);
             }
         }
     }
 
-    function getRewardMgr(uint tokenID)
-        public
-        view
-        returns (address)
-    {
-        return listRewardMgr[tokenID];
+    function getRewardMgr() public view returns (address) {
+        return rewardMgr;
     }
 
-    function getLightWorkerDao(uint tokenID)
-        public
-        view
-        returns (address)
-    {
+    function setRewardMgr(address _rewardMgr) public onlyOwner {
+        rewardMgr = _rewardMgr;
+    }
+
+    function getLightWorkerDao(uint256 tokenID) public view returns (address) {
         return listDao[tokenID];
     }
+
     // Token ID enumeration
-    function _addTokenID(uint tokenID)
-        internal
-    {
-        if(!isTokenID[tokenID]) {
+    function _addTokenID(uint256 tokenID) internal {
+        if (!isTokenID[tokenID]) {
             tokenIDs.push(tokenID);
             isTokenID[tokenID] = true;
         }
     }
-    
-    function getTokenIDs()
+
+    function getTokenIDs() public view returns (uint256[] memory) {
+        return tokenIDs;
+    }
+
+    function getTokenOperator(uint256 tokenId)
         public
         view
-        returns (uint256[] memory)
+        returns (address operator)
     {
-
-        uint256[] memory _tokenIDs = new uint256[](tokenIDs.length);
-
-        for (uint256 i = 0; i < tokenIDs.length; ++i) {
-            _tokenIDs[i] = tokenIDs[i];
-        }
-        return _tokenIDs;
-    }
-    
-    function getTokenOperator(uint tokenId) public returns (address) {
-        address operator =  LightWorkerDao(listDao[tokenId]).getOperator();
-        return operator;
+        operator = LightWorkerDao(payable(listDao[tokenId])).getOperator();
     }
 }
