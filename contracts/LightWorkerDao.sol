@@ -6,6 +6,7 @@ import "@openzeppelin/contracts/utils/math/Math.sol";
 import "@openzeppelin/contracts/token/ERC1155/IERC1155.sol";
 
 import "./IRewardMgr.sol";
+import "./GatingNft1155.sol";
 
 /// @title LightWorkerDao  - Allows multiple parties to agree on challenges before execution.
 contract LightWorkerDao {
@@ -34,8 +35,6 @@ contract LightWorkerDao {
     // Operator posting predectionChallenge
     address public operator;
 
-    uint256 public required;
-
     address[] public workers;
 
     // Token ID, this contract instance is supporting in Gating Contract
@@ -51,6 +50,7 @@ contract LightWorkerDao {
 
     struct PredictionChallenge {
         uint256 value; // Filled by contract after processing proposals. Predicted median value
+        uint256 required; // Calculate median value and distribute rewards after getting required amount of proposals
         uint256 minValue; // Reject proposals below this value. Operator supplied.
         uint256 maxValue; // Reject proposals above this value. Operator supplied.
         uint256 rewardThreshold; // Proposal is eligible for reward if proposal is between median +- rewardThreshold
@@ -82,7 +82,10 @@ contract LightWorkerDao {
     }
 
     modifier transactionExists(uint256 challengeId) {
-        require(challenges[challengeId].value != 0, "Worker: Non-exisiting Tx");
+        require(
+            challenges[challengeId].creationTime != 0,
+            "Worker: Non-exisiting Tx"
+        );
         _;
     }
 
@@ -149,14 +152,17 @@ contract LightWorkerDao {
     }
 
     function addPredictionChallenge(
+        uint256 required,
         uint256 rewardAmount,
         uint256 rewardThreshold,
         uint256 minValue,
         uint256 maxValue,
         uint256 validWindow,
         bytes memory data
-    ) public returns (uint256 challengeId) {
+    ) public payable returns (uint256 challengeId) {
+        require(msg.value >= rewardAmount, "Worker: Insuffient Reward");
         challengeId = _addPredictionChallenge(
+            required,
             rewardAmount,
             rewardThreshold,
             minValue,
@@ -164,16 +170,18 @@ contract LightWorkerDao {
             validWindow,
             data
         );
-        //confirmTransaction(challengeId);
     }
 
     function getPredictionChallenge(uint256 _challengeId)
         external
         view
         returns (
+            uint256 required,
+            uint256 rewardAmount,
+            uint256 rewardThreshold,
             uint256 minValue,
             uint256 maxValue,
-            uint256 creationTIme,
+            uint256 creationTime,
             uint256 validWindow,
             bytes memory data
         )
@@ -184,6 +192,9 @@ contract LightWorkerDao {
         );
         PredictionChallenge memory challenge = challenges[_challengeId];
         return (
+            challenge.required,
+            challenge.rewardAmount,
+            challenge.rewardThreshold,
             challenge.minValue,
             challenge.maxValue,
             challenge.creationTime,
@@ -198,10 +209,6 @@ contract LightWorkerDao {
         transactionExists(challengeId)
         notConfirmed(challengeId, msg.sender)
     {
-        require(
-            IERC1155(parent).balanceOf(msg.sender, tokenID) > 0,
-            "Worker: No token"
-        );
         require(
             challenges[challengeId].validWindow +
                 challenges[challengeId].creationTime >
@@ -221,7 +228,7 @@ contract LightWorkerDao {
         for (uint256 i = 0; i < workers.length; i++) {
             if (responses[challengeId][workers[i]] > 0) {
                 count += 1;
-                if (count == required) return true;
+                if (count == challenges[challengeId].required) return true;
             }
         }
         return false;
@@ -245,10 +252,6 @@ contract LightWorkerDao {
                 value,
                 challenges[challengeId].rewardThreshold
             );
-            (bool sent, ) = payable(rewardMgr).call{
-                value: challenges[challengeId].rewardAmount
-            }("");
-            require(sent, "Worker Dao: Insufficent Reward");
             distribRewardsFromEscrow(
                 winners,
                 tokenID,
@@ -275,6 +278,7 @@ contract LightWorkerDao {
     }
 
     function _addPredictionChallenge(
+        uint256 required,
         uint256 rewardAmount,
         uint256 rewardThreshold,
         uint256 minValue,
@@ -284,6 +288,7 @@ contract LightWorkerDao {
     ) internal returns (uint256 challengeId) {
         challengeId = challengeCount;
         challenges[challengeId] = PredictionChallenge({
+            required: required,
             value: minValue,
             minValue: minValue,
             maxValue: maxValue,
@@ -327,34 +332,18 @@ contract LightWorkerDao {
         uint256 count = 0;
         for (uint256 i = 0; i < workers.length; i++) {
             uint256 predValue = responses[challengeId][workers[i]];
-            if (predValue > value - threshold && predValue < value - threshold)
+            if (threshold > value) continue;
+            if (predValue > value - threshold && predValue < value + threshold)
                 count++;
         }
         address[] memory winners = new address[](count);
         uint256 j = 0;
         for (uint256 i = 0; i < workers.length && j < count; i++) {
             uint256 predValue = responses[challengeId][workers[i]];
-            if (predValue > value - threshold && predValue < value - threshold)
+            if (predValue > value - threshold && predValue < value + threshold)
                 winners[j++] = workers[i];
         }
         return winners;
-    }
-
-    function getPredictions(uint256 challengeId)
-        public
-        view
-        returns (address[] memory _confirmations)
-    {
-        address[] memory confirmationsTemp = new address[](workers.length);
-        uint256 count = 0;
-        uint256 i;
-        for (i = 0; i < workers.length; i++)
-            if (responses[challengeId][workers[i]] > 0) {
-                confirmationsTemp[count] = workers[i];
-                count += 1;
-            }
-        _confirmations = new address[](count);
-        for (i = 0; i < count; i++) _confirmations[i] = confirmationsTemp[i];
     }
 
     function getChallengeIds(
@@ -363,6 +352,7 @@ contract LightWorkerDao {
         bool pending,
         bool executed
     ) public view returns (uint256[] memory _transactionIds) {
+        require(to > from, "Worker: To should be bigger than from");
         uint256[] memory transactionIdsTemp = new uint256[](challengeCount);
         uint256 count = 0;
         uint256 i;
@@ -395,9 +385,12 @@ contract LightWorkerDao {
     // Allow this DAO contract to act as operator before calling releaseToken
     // IERC1155(parent).setApprovalForAll(address(this), true);
 
-    function releaseToken() public payable returns (uint256) {
+    function releaseToken() public returns (uint256) {
         // Check the msg.sender have tokens
-        uint256 tokenBalance = IERC1155(parent).balanceOf(msg.sender, tokenID);
+        uint256 tokenBalance = GatingNft1155(parent).balanceOf(
+            msg.sender,
+            tokenID
+        );
         require(tokenBalance > 0, "You do not own token");
         require(
             address(this).balance >= tokenPrice,
@@ -422,19 +415,20 @@ contract LightWorkerDao {
         tokenPrice = price;
     }
 
-    function setRequired(uint256 _required) public onlyOperator {
-        required = _required;
-    }
-
     function getTokenPrice() public view returns (uint256) {
         return tokenPrice;
     }
 
     function distribRewardsFromEscrow(
         address[] memory winners,
+        uint256 tokenId,
         uint256 _totalPayment
-    ) public onlyOperator {
-        IRewardMgr(rewardMgr).distribute(winners, _totalPayment);
+    ) internal {
+        (bool sent, ) = payable(rewardMgr).call{value: _totalPayment}("");
+        require(sent, "Worker Dao: Insufficent Reward");
+        require(winners.length > 0, "Worker: No Winner");
+
+        IRewardMgr(rewardMgr).distribute(winners, tokenId, _totalPayment);
         emit DistribRewards(tokenID);
     }
 

@@ -144,7 +144,6 @@ contract GatingNft1155 is Context, ERC1155, ERC1155Burnable, ERC1155Pausable {
     ) internal virtual override(ERC1155) {
         for (uint256 i = 0; i < ids.length; ++i) {
             uint256 tokenId = ids[i];
-
             // Remove if balance falls to zero
             if (from != address(0) && balanceOf(from, tokenId) == 0) {
                 LightWorkerDao(payable(listDao[tokenId])).removeWorker(from);
