@@ -1,6 +1,6 @@
 const { expect } = require("chai");
 
-describe("NFT token gating contract", function () {
+describe("Gating NFT 1155 Contract", function () {
   let _name="Test Gating";
   let owner, addr1, addr2, addrs;
   let gatingNft;
@@ -20,7 +20,7 @@ describe("NFT token gating contract", function () {
   })
 
   describe("Transactions", function () {
-    it("Anyone can mint any amount of NFT and become the operator", async function () {
+    it("Anyone can mint any amount of NFT to become a operator", async function () {
       await gatingNft.connect(addr1).mint(addr1.address, 1, 10, []);
       
       const addr1Balance = await gatingNft.balanceOf(addr1.address, 1);
@@ -30,7 +30,7 @@ describe("NFT token gating contract", function () {
       expect(operator).to.equal(addr1.address);
     });
 
-    it("Light worker dao contract is created when minting new nft", async function () {
+    it("Light worker dao contract is created when new NFTs are minted", async function () {
       await gatingNft.connect(addr1).mint(addr1.address, 1, 10, []);
       
       const ligthAddr = await gatingNft.getLightWorkerDao(1);
@@ -45,13 +45,13 @@ describe("NFT token gating contract", function () {
       expect([Number(ids[0]), Number(ids[1])]).to.have.same.members([1, 2]);
     });
 
-    it("Only self minting allowed", async function () {
+    it("Only self minting is allowed", async function () {
       await expect(
         gatingNft.connect(addr1).mint(addr2.address, 1, 10, [])
       ).to.be.revertedWith("Only self minting allowed");
     });
 
-    it("Owner can set RewardMgr address", async function () {
+    it("Owner can change RewardMgr Contract address", async function () {
       const RewardMgr = await ethers.getContractFactory("RewardMgr");
       const rewardMgr = await RewardMgr.deploy(gatingNft.address);
 

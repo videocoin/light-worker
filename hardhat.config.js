@@ -10,5 +10,11 @@ module.exports = {
         runs: 200
       }
     }
+  },
+  networks: {
+    hardhat: {
+      blockGasLimit: 12500000,
+      gasPrice: 8000000000
+    },
   }
 };

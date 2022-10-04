@@ -1,13 +1,12 @@
 const { expect } = require("chai");
 const { ethers } = require("hardhat");
 
-describe("Light Worker Dao contract", function () {
+describe("Light Worker Dao Contract", function () {
   let owner, addr1, addr2, addrs;
   let gatingNft;
   let lightWorkerDao;
 
   beforeEach(async function () {
-    provider = ethers.getDefaultProvider();
     [owner, addr1, addr2, ...addrs] = await ethers.getSigners();
     
     const GatingNft1155 = await ethers.getContractFactory("GatingNft1155");
@@ -38,22 +37,23 @@ describe("Light Worker Dao contract", function () {
       expect(workers).to.equal(addr1.address);
     });
 
-    // it("Parent(gating nft) can add and remove the worker", async function () {
-    //   await hre.network.provider.request({
-    //     method: "hardhat_impersonateAccount",
-    //     params: [gatingNft.address],
-    //   });
-    //   const parent = await ethers.getSigner(gatingNft.address);
+    it("Parent(gating nft) can add and remove workers", async function () {
+      await hre.network.provider.request({
+        method: "hardhat_impersonateAccount",
+        params: [gatingNft.address],
+      });
+      let parent = await ethers.getSigner(gatingNft.address);
+      
+      await addr1.sendTransaction({to: parent.address, value: ethers.utils.parseEther("1")});
 
-    //   let [owner, signer] = await ethers.getSigners();
+      await lightWorkerDao.connect(parent).addWorker(addr2.address);
+      await lightWorkerDao.connect(parent).removeWorker(addr2.address);
+      await expect(
+        lightWorkerDao.connect(addr1).addWorker(addr2.address)
+      ).to.be.revertedWith("Worker: Invalid Parent");
+    });
 
-    //   const params = { to: parent.address, gasLimit: "0x5209", value: ethers.utils.parseEther("0.0").toHexString()};
-    //   const txHash = await signer.sendTransaction(params);
-    //   balance = await provider.getBalance(parent.address);
-    //   console.log(balance.toString());
-    // });
-
-    it("someone can't add challenge without sufficent reward amount", async function () {
+    it("Anyone can't add new challenge without sufficent reward amount", async function () {
       await expect(
         lightWorkerDao.connect(addr1).addPredictionChallenge(
           2, ethers.utils.parseEther("1"), 100, 0, 10000, 1000, [], 
@@ -62,7 +62,7 @@ describe("Light Worker Dao contract", function () {
       ).to.be.revertedWith("Worker: Insuffient Reward")
     });
 
-    it("someone can add prediction challenge with sufficient reward amount", async function () {
+    it("Anyone can add new prediction challenge with sufficient reward amount", async function () {
       await lightWorkerDao.connect(addr1).addPredictionChallenge(
         2, ethers.utils.parseEther("1"), 3, 0, 10000, 1000, [], 
         {value: ethers.utils.parseEther("1")}
@@ -91,19 +91,19 @@ describe("Light Worker Dao contract", function () {
       ).to.be.revertedWith("Worker: Challenge ID out of range");
     });
 
-    it("Only nft holder can submit response", async function () {
+    it("Only nft holder can submit a response", async function () {
       await expect(
         lightWorkerDao.connect(addr2).submitResponse(0, 10)
       ).to.be.revertedWith("Worker: Non-existing Worker");
     });
 
-    it("Nft holder can't submit response to non-existing challenge", async function () {
+    it("Nft holder can't submit a response to non-existing challenge", async function () {
       await expect(
         lightWorkerDao.connect(addr1).submitResponse(1, 10)
       ).to.be.revertedWith("Worker: Non-exisiting Tx");
     });
 
-    it("Nft holder can submit response to existing challenge and can't send it again", async function () {
+    it("Nft holder can submit a response to existing challenge and can't send it again", async function () {
       await lightWorkerDao.connect(addr1).submitResponse(0, 10);
       let responseCount = await lightWorkerDao.getResponseCount(0);
       await expect(responseCount).to.be.equal(1);
@@ -112,20 +112,20 @@ describe("Light Worker Dao contract", function () {
       ).to.be.revertedWith("Worker: Confirmed");
     });
     
-    it("users can acquire token after token price is set by owner", async function () {
+    it("Users can acquire a token after token price is set by owner", async function () {
       await expect(
         lightWorkerDao.connect(addr1).acquireToken({value: ethers.utils.parseEther("0.1")})
         ).to.be.revertedWith("Token price not set yet");
     });
       
-    it("users can buy token after token price set", async function () {
+    it("Users can buy a token after token price set", async function () {
       await lightWorkerDao.connect(addr1).setTokenPrice(ethers.utils.parseEther("0.1"));
       await lightWorkerDao.connect(addr2).acquireToken({value: ethers.utils.parseEther("0.1")});
       let balance = await gatingNft.balanceOf(addr2.address, 1);
       expect(Number(balance)).to.be.equal(1);
     });
 
-    it("Release token", async function () {
+    it("Return back NFT token to get fund", async function () {
       await lightWorkerDao.connect(addr1).setTokenPrice(ethers.utils.parseEther("0.1"));
       await lightWorkerDao.connect(addr2).acquireToken({value: ethers.utils.parseEther("0.1")});
       
@@ -145,7 +145,7 @@ describe("Light Worker Dao contract", function () {
       ).to.be.greaterThan(0.098*10**18);
     });
       
-    it("Process predictions after collecting required amount of response", async function () {
+    it("Process predictions after collecting required amount of responses", async function () {
       await lightWorkerDao.connect(addr1).setTokenPrice(ethers.utils.parseEther("0.1"));
       await lightWorkerDao.connect(addr2).acquireToken({value: ethers.utils.parseEther("0.1")});
       

@@ -7,6 +7,7 @@ import "@openzeppelin/contracts/token/ERC1155/IERC1155.sol";
 
 import "./IRewardMgr.sol";
 import "./GatingNft1155.sol";
+import "hardhat/console.sol";
 
 /// @title LightWorkerDao  - Allows multiple parties to agree on challenges before execution.
 contract LightWorkerDao {
@@ -134,8 +135,8 @@ contract LightWorkerDao {
         if (!isWorker[worker]) {
             workers.push(worker);
             isWorker[worker] = true;
+            emit WorkerAdded(tokenID, worker);
         }
-        emit WorkerAdded(tokenID, worker);
     }
 
     function removeWorker(address worker) public onlyParent {
@@ -330,17 +331,17 @@ contract LightWorkerDao {
         uint256 threshold
     ) public view returns (address[] memory) {
         uint256 count = 0;
+        uint256 lower = 0;
+        if (threshold < value) lower = value - threshold;
         for (uint256 i = 0; i < workers.length; i++) {
             uint256 predValue = responses[challengeId][workers[i]];
-            if (threshold > value) continue;
-            if (predValue > value - threshold && predValue < value + threshold)
-                count++;
+            if (predValue > lower && predValue < value + threshold) count++;
         }
         address[] memory winners = new address[](count);
         uint256 j = 0;
         for (uint256 i = 0; i < workers.length && j < count; i++) {
             uint256 predValue = responses[challengeId][workers[i]];
-            if (predValue > value - threshold && predValue < value + threshold)
+            if (predValue > lower && predValue < value + threshold)
                 winners[j++] = workers[i];
         }
         return winners;
@@ -387,7 +388,7 @@ contract LightWorkerDao {
 
     function releaseToken() public returns (uint256) {
         // Check the msg.sender have tokens
-        uint256 tokenBalance = GatingNft1155(parent).balanceOf(
+        uint256 tokenBalance = GatingNft1155(payable(parent)).balanceOf(
             msg.sender,
             tokenID
         );

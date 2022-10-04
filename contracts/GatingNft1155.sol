@@ -41,6 +41,9 @@ contract GatingNft1155 is Context, ERC1155, ERC1155Burnable, ERC1155Pausable {
         _;
     }
 
+    /// @dev Fallback function allows to deposit ether.
+    receive() external payable {}
+
     /**
      * @dev Grants `DEFAULT_ADMIN_ROLE`, `MINTER_ROLE`, and `PAUSER_ROLE` to the account that
      * deploys the contract.
