@@ -46,3 +46,11 @@ Install and update dependencies
 ### npx hardhat test
 
 Start running test cases
+
+### npx hardhat run scripts/deploy.js --network mumbai
+
+Deploy smart contract
+
+### npx hardhat coverage
+
+Check test coverage
