@@ -29,15 +29,5 @@ module.exports = {
     apiKey: {
       polygonMumbai: process.env.MUMBAI_API_KEY,
     },
-    customChains: [  // <========================= custom chains config here
-      {
-        network: 'polygonMumbai',
-        chainId: 80001,
-        urls: {
-          apiURL: 'http://api-testnet.polygonscan.com/api',  // https => http
-          browserURL: 'https://mumbai.polygonscan.com',
-        },
-      },
-    ],
   },
 };
