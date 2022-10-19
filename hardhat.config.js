@@ -6,7 +6,7 @@ require("solidity-coverage");
 
 module.exports = {
   solidity: {
-    version: "0.8.7",
+    version: "0.8.11",
     settings: {
       optimizer: {
         enabled: true,
@@ -24,10 +24,13 @@ module.exports = {
       accounts:
         process.env.PRIVATE_KEY !== undefined ? [process.env.PRIVATE_KEY] : [],
     },
+    polygon: {
+      url: process.env.POLYGON_URL,
+      accounts:
+      process.env.POLYGON_PRIVATE_KEY !== undefined ? [process.env.POLYGON_PRIVATE_KEY] : [],
+    }
   },
   etherscan: {
-    apiKey: {
-      polygonMumbai: process.env.MUMBAI_API_KEY,
-    },
+    apiKey: process.env.MUMBAI_API_KEY,
   },
 };

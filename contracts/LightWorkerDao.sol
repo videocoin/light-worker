@@ -184,6 +184,7 @@ contract LightWorkerDao {
             uint256 maxValue,
             uint256 creationTime,
             uint256 validWindow,
+            bool execeuted,
             bytes memory data
         )
     {
@@ -200,6 +201,7 @@ contract LightWorkerDao {
             challenge.maxValue,
             challenge.creationTime,
             challenge.validWindow,
+            challenge.executed,
             challenge.data
         );
     }
