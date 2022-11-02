@@ -46,7 +46,7 @@ module.exports = {
         chainId: 1,
         urls: {
           apiURL: "https://explorer.dev.videocoin.network/api",
-          browserURL: "https://dev.videocoin.network/rpc"
+          browserURL: "https://explorer.dev.videocoin.network"
         }
       }
     ]
