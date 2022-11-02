@@ -28,9 +28,27 @@ module.exports = {
       url: process.env.POLYGON_URL,
       accounts:
       process.env.POLYGON_PRIVATE_KEY !== undefined ? [process.env.POLYGON_PRIVATE_KEY] : [],
+    },
+    vivid: {
+      url: process.env.VIVID_URL,
+      accounts:
+      process.env.VIVID_PRIVATE_KEY !== undefined ? [process.env.VIVID_PRIVATE_KEY] : [],
     }
   },
   etherscan: {
-    apiKey: process.env.MUMBAI_API_KEY,
-  },
+    apiKey: {
+      polygon: process.env.MUMBAI_API_KEY,
+      vivid: process.env.SCOUT_API_KEY,
+    },
+    customChains: [
+      {
+        network: "vivid",
+        chainId: 1,
+        urls: {
+          apiURL: "https://explorer.dev.videocoin.network/api",
+          browserURL: "https://dev.videocoin.network/rpc"
+        }
+      }
+    ]
+  }
 };

@@ -1,5 +1,9 @@
 const hre = require("hardhat");
 
+const sleep = (milliseconds) => {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+};
+
 const info = async () => {
   const [deployer] = await ethers.getSigners();
   console.log("Deploying contracts with account:", deployer.address);
@@ -19,13 +23,13 @@ async function main() {
   console.log("GatingNFT deployed to:", gatingNft.address);
 
   const gateAddress = gatingNft.address;
-  await verify(gateAddress,[nftName]);
+  await verify(gateAddress, [nftName]);
 }
 
 async function verify(contractAddress, arguments){
-
+  await sleep(3* 1000); // await contract is deployed correctly
   try{
-        await run("verify:verify", {
+        await hre.run("verify:verify", {
           address: contractAddress,
           constructorArguments: arguments
         })
